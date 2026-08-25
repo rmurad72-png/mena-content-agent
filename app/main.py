@@ -2,6 +2,7 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import TelegramError
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -166,6 +167,8 @@ async def button_handler(
             ""
         )
 
+        context.user_data["selected_channel"] = channel_name
+
         keyboard = [
             [
                 InlineKeyboardButton(
@@ -190,6 +193,16 @@ async def button_handler(
         return
 
     if query.data == "final_confirm":
+        selected_channel = context.user_data.get(
+            "selected_channel"
+        )
+
+        if selected_channel != "telegram":
+            await query.edit_message_text(
+                "Only Telegram publishing is enabled currently."
+            )
+            return
+
         keyboard = [
             [
                 InlineKeyboardButton(
@@ -207,18 +220,46 @@ async def button_handler(
 
         await query.edit_message_text(
             "Final confirmation completed. "
-            "Publishing is still disabled in this test version.",
+            "Publishing to Telegram is ready.",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
 
     if query.data == "publish_now":
-        await query.edit_message_text(
-            "Publishing is disabled in the test version."
+        draft_text = (
+            "Test publication from MENA Content Agent.
+
+"
+            "This is a Telegram publishing test."
         )
+
+        try:
+            sent_message = await context.bot.send_message(
+                chat_id=settings.telegram_channel_id,
+                text=draft_text
+            )
+
+            await query.edit_message_text(
+                "Published successfully to Telegram.
+"
+                + "Message ID: "
+                + str(sent_message.message_id)
+            )
+
+        except TelegramError as error:
+            await query.edit_message_text(
+                "Telegram publishing failed: "
+                + str(error)
+            )
+
         return
 
     if query.data == "cancel_publish":
+        context.user_data.pop(
+            "selected_channel",
+            None
+        )
+
         await query.edit_message_text(
             "Operation cancelled."
         )
