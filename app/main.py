@@ -16,7 +16,7 @@ from telegram.ext import (
 from app.config import settings
 
 
-TITLE, CONTENT, PHOTO = range(3)
+TITLE, CONTENT, LINK, PHOTO = range(4)
 NEW_LINE = chr(10)
 
 
@@ -39,14 +39,27 @@ def is_admin(update: Update) -> bool:
 
 def build_post_text(
     title: str,
-    content: str
+    content: str,
+    link: str | None
 ) -> str:
-    return (
+    post_text = (
         title
         + NEW_LINE
         + NEW_LINE
         + content
     )
+
+    if link:
+        post_text = (
+            post_text
+            + NEW_LINE
+            + NEW_LINE
+            + "رابط الموضوع:"
+            + NEW_LINE
+            + link
+        )
+
+    return post_text
 
 
 def get_preview_keyboard() -> InlineKeyboardMarkup:
@@ -221,7 +234,55 @@ async def receive_content(
     context.user_data["draft_content"] = content
 
     await update.message.reply_text(
-        "Now send a photo, send an image URL, or type /skip."
+        "Send the topic or article URL, or type /skip."
+    )
+
+    return LINK
+
+
+async def receive_link(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if update.message is None:
+        return ConversationHandler.END
+
+    if update.message.text is None:
+        await update.message.reply_text(
+            "Send a URL starting with http or https, "
+            "or type /skip."
+        )
+        return LINK
+
+    link = update.message.text.strip()
+
+    if link == "/skip":
+        context.user_data.pop(
+            "draft_link",
+            None
+        )
+
+        await update.message.reply_text(
+            "Now send a photo, send an image URL, "
+            "or type /skip."
+        )
+
+        return PHOTO
+
+    if not (
+        link.startswith("http://")
+        or link.startswith("https://")
+    ):
+        await update.message.reply_text(
+            "Invalid URL. It must start with http:// or https://."
+        )
+        return LINK
+
+    context.user_data["draft_link"] = link
+
+    await update.message.reply_text(
+        "Now send a photo, send an image URL, "
+        "or type /skip."
     )
 
     return PHOTO
@@ -240,7 +301,15 @@ async def receive_photo(
     if update.message.photo:
         largest_photo = update.message.photo[-1]
         photo_file_id = largest_photo.file_id
-        context.user_data["draft_photo_file_id"] = photo_file_id
+
+        context.user_data["draft_photo_file_id"] = (
+            photo_file_id
+        )
+
+        context.user_data.pop(
+            "draft_photo_url",
+            None
+        )
 
     elif update.message.text:
         possible_url = update.message.text.strip()
@@ -250,17 +319,37 @@ async def receive_photo(
             or possible_url.startswith("https://")
         ):
             photo_url = possible_url
-            context.user_data["draft_photo_url"] = photo_url
+
+            context.user_data["draft_photo_url"] = (
+                photo_url
+            )
+
+            context.user_data.pop(
+                "draft_photo_file_id",
+                None
+            )
+
+        elif possible_url == "/skip":
+            context.user_data.pop(
+                "draft_photo_file_id",
+                None
+            )
+
+            context.user_data.pop(
+                "draft_photo_url",
+                None
+            )
+
         else:
             await update.message.reply_text(
-                "Send a photo, send a valid HTTP/HTTPS image URL, "
+                "Send a photo, a valid image URL, "
                 "or type /skip."
             )
             return PHOTO
 
     else:
         await update.message.reply_text(
-            "Send a photo, send an image URL, or type /skip."
+            "Send a photo, an image URL, or type /skip."
         )
         return PHOTO
 
@@ -274,20 +363,25 @@ async def receive_photo(
         ""
     )
 
+    link = context.user_data.get(
+        "draft_link"
+    )
+
+    preview_text = build_post_text(
+        title,
+        content,
+        link
+    )
+
     preview_text = (
         "Draft preview"
         + NEW_LINE
         + NEW_LINE
-        + "Title: "
-        + title
+        + preview_text
         + NEW_LINE
         + NEW_LINE
-        + "Content:"
-        + NEW_LINE
-        + content
-        + NEW_LINE
-        + NEW_LINE
-        + "Photo: included"
+        + "Photo: "
+        + ("included" if photo_file_id or photo_url else "none")
     )
 
     if photo_file_id is not None:
@@ -296,6 +390,7 @@ async def receive_photo(
             caption=preview_text,
             reply_markup=get_preview_keyboard()
         )
+
     elif photo_url is not None:
         try:
             await update.message.reply_photo(
@@ -305,51 +400,15 @@ async def receive_photo(
             )
         except TelegramError:
             await update.message.reply_text(
-                "The image URL could not be loaded. "
-                "Please send another URL or type /skip."
+                "The image URL could not be loaded.",
+                reply_markup=get_preview_keyboard()
             )
-            return PHOTO
 
-    return ConversationHandler.END
-
-
-async def skip_photo(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    if update.message is None:
-        return ConversationHandler.END
-
-    title = context.user_data.get(
-        "draft_title",
-        ""
-    )
-
-    content = context.user_data.get(
-        "draft_content",
-        ""
-    )
-
-    preview_text = (
-        "Draft preview"
-        + NEW_LINE
-        + NEW_LINE
-        + "Title: "
-        + title
-        + NEW_LINE
-        + NEW_LINE
-        + "Content:"
-        + NEW_LINE
-        + content
-        + NEW_LINE
-        + NEW_LINE
-        + "Photo: none"
-    )
-
-    await update.message.reply_text(
-        preview_text,
-        reply_markup=get_preview_keyboard()
-    )
+    else:
+        await update.message.reply_text(
+            preview_text,
+            reply_markup=get_preview_keyboard()
+        )
 
     return ConversationHandler.END
 
@@ -433,7 +492,9 @@ async def button_handler(
             ""
         )
 
-        context.user_data["selected_channel"] = channel_name
+        context.user_data["selected_channel"] = (
+            channel_name
+        )
 
         keyboard = [
             [
@@ -450,14 +511,10 @@ async def button_handler(
             ],
         ]
 
-        message_text = (
+        await query.edit_message_text(
             "Selected channel: "
             + channel_name
-            + ". Confirm before publishing:"
-        )
-
-        await query.edit_message_text(
-            message_text,
+            + ". Confirm before publishing:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
@@ -506,6 +563,10 @@ async def button_handler(
             ""
         )
 
+        link = context.user_data.get(
+            "draft_link"
+        )
+
         photo_file_id = context.user_data.get(
             "draft_photo_file_id"
         )
@@ -516,7 +577,8 @@ async def button_handler(
 
         post_text = build_post_text(
             title,
-            content
+            content,
+            link
         )
 
         try:
@@ -526,12 +588,14 @@ async def button_handler(
                     photo=photo_file_id,
                     caption=post_text
                 )
+
             elif photo_url:
                 sent_message = await context.bot.send_photo(
                     chat_id=settings.telegram_channel_id,
                     photo=photo_url,
                     caption=post_text
                 )
+
             else:
                 sent_message = await context.bot.send_message(
                     chat_id=settings.telegram_channel_id,
@@ -541,24 +605,20 @@ async def button_handler(
             context.user_data.clear()
 
             success_text = (
-                "Published successfully to Telegram. "
-                "Message ID: "
+                "Published successfully to Telegram."
+                + NEW_LINE
+                + "Message ID: "
                 + str(sent_message.message_id)
             )
 
-            try:
-                await query.edit_message_text(
-                    success_text
-                )
-            except TelegramError:
-                await context.bot.send_message(
-                    chat_id=update.effective_chat.id,
-                    text=success_text
-                )
+            await query.edit_message_text(
+                success_text
+            )
 
         except TelegramError as error:
             error_text = (
-                "Telegram publishing failed: "
+                "Telegram publishing failed:"
+                + NEW_LINE
                 + str(error)
             )
 
@@ -601,6 +661,12 @@ draft_conversation = ConversationHandler(
                 receive_content
             )
         ],
+        LINK: [
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND,
+                receive_link
+            )
+        ],
         PHOTO: [
             MessageHandler(
                 filters.PHOTO,
@@ -608,7 +674,7 @@ draft_conversation = ConversationHandler(
             ),
             MessageHandler(
                 filters.TEXT & filters.COMMAND,
-                skip_photo
+                receive_photo
             ),
             MessageHandler(
                 filters.TEXT & ~filters.COMMAND,
@@ -670,7 +736,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="MENA Content Agent",
-    version="0.5.0",
+    version="0.5.1",
     lifespan=lifespan
 )
 
@@ -680,7 +746,7 @@ async def root():
     return {
         "name": "MENA Content Agent",
         "status": "running",
-        "version": "0.5.0"
+        "version": "0.5.1"
     }
 
 
@@ -705,4 +771,4 @@ async def telegram_webhook(request: Request):
 
     return Response(
         status_code=200
-        )
+    )
