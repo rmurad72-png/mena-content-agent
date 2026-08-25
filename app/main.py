@@ -8,19 +8,36 @@ from telegram.ext import (
     ContextTypes,
 )
 
+from app.config import settings
+
 
 telegram_app = (
     Application.builder()
-    .token("PLACEHOLDER")
+    .token(settings.bot_token)
     .updater(None)
     .build()
 )
+
+
+def is_admin(update: Update) -> bool:
+    user = update.effective_user
+
+    if user is None:
+        return False
+
+    return user.id in settings.admin_ids
 
 
 async def start_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    if not is_admin(update):
+        await update.message.reply_text(
+            "عذرًا، هذا البوت خاص بالمشرفين."
+        )
+        return
+
     await update.message.reply_text(
         "مرحبًا بك في وكيل المحتوى الذكي.
 
@@ -33,6 +50,12 @@ async def help_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
+    if not is_admin(update):
+        await update.message.reply_text(
+            "عذرًا، هذا البوت خاص بالمشرفين."
+        )
+        return
+
     await update.message.reply_text(
         "الأوامر المتاحة:
 
@@ -62,7 +85,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="MENA Content Agent",
+    title=settings.app_name,
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -71,7 +94,7 @@ app = FastAPI(
 @app.get("/")
 async def root():
     return {
-        "name": "MENA Content Agent",
+        "name": settings.app_name,
         "status": "running",
         "version": "0.1.0"
     }
@@ -81,7 +104,7 @@ async def root():
 async def health():
     return {
         "status": "ok",
-        "environment": "production"
+        "environment": settings.environment
     }
 
 
@@ -90,16 +113,22 @@ async def telegram_webhook(
     request: Request,
     x_telegram_bot_api_secret_token: str | None = Header(default=None)
 ):
-    expected_secret = "PLACEHOLDER"
-
-    if x_telegram_bot_api_secret_token != expected_secret:
+    if (
+        x_telegram_bot_api_secret_token
+        != settings.telegram_webhook_secret
+    ):
         raise HTTPException(
             status_code=403,
             detail="Invalid webhook secret"
         )
 
     data = await request.json()
-    update = Update.de_json(data, telegram_app.bot)
+
+    update = Update.de_json(
+        data,
+        telegram_app.bot
+    )
+
     await telegram_app.process_update(update)
 
     return Response(status_code=200)
