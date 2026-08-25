@@ -178,10 +178,14 @@ async def button_handler(
             ],
         ]
 
-        await query.edit_message_text(
+        message_text = (
             "Selected channel: "
             + channel_name
-            + ". Confirm before publishing:",
+            + ". Confirm before publishing:"
+        )
+
+        await query.edit_message_text(
+            message_text,
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
@@ -221,9 +225,7 @@ async def button_handler(
 
     if query.data == "publish_now":
         draft_text = (
-            "Test publication from MENA Content Agent.
-
-"
+            "Test publication from MENA Content Agent. "
             "This is a Telegram publishing test."
         )
 
@@ -233,17 +235,21 @@ async def button_handler(
                 text=draft_text
             )
 
-            await query.edit_message_text(
+            success_text = (
                 "Published successfully to Telegram. "
                 "Message ID: "
                 + str(sent_message.message_id)
             )
 
+            await query.edit_message_text(success_text)
+
         except TelegramError as error:
-            await query.edit_message_text(
+            error_text = (
                 "Telegram publishing failed: "
                 + str(error)
             )
+
+            await query.edit_message_text(error_text)
 
         return
 
@@ -289,7 +295,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="MENA Content Agent",
-    version="0.3.1",
+    version="0.3.2",
     lifespan=lifespan
 )
 
@@ -299,7 +305,7 @@ async def root():
     return {
         "name": "MENA Content Agent",
         "status": "running",
-        "version": "0.3.1"
+        "version": "0.3.2"
     }
 
 
