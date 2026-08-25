@@ -30,6 +30,27 @@ def is_admin(update: Update) -> bool:
     return user.id in settings.admin_ids
 
 
+async def myid_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if update.message is None:
+        return
+
+    user = update.effective_user
+
+    if user is None:
+        await update.message.reply_text(
+            "User ID is unavailable."
+        )
+        return
+
+    await update.message.reply_text(
+        "Your Telegram User ID is: "
+        + str(user.id)
+    )
+
+
 async def start_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -38,7 +59,9 @@ async def start_command(
         return
 
     if not is_admin(update):
-        await update.message.reply_text("Access denied.")
+        await update.message.reply_text(
+            "Access denied. Send /myid to get your ID."
+        )
         return
 
     keyboard = [
@@ -70,11 +93,13 @@ async def help_command(
         return
 
     if not is_admin(update):
-        await update.message.reply_text("Access denied.")
+        await update.message.reply_text(
+            "Access denied. Send /myid to get your ID."
+        )
         return
 
     await update.message.reply_text(
-        "Commands: /start and /help"
+        "Commands: /start, /help, and /myid"
     )
 
 
@@ -90,12 +115,14 @@ async def button_handler(
     await query.answer()
 
     if not is_admin(update):
-        await query.edit_message_text("Access denied.")
+        await query.edit_message_text(
+            "Access denied."
+        )
         return
 
     if query.data == "show_help":
         await query.edit_message_text(
-            "Commands: /start and /help"
+            "Commands: /start, /help, and /myid"
         )
         return
 
@@ -270,6 +297,10 @@ async def button_handler(
 
 
 telegram_app.add_handler(
+    CommandHandler("myid", myid_command)
+)
+
+telegram_app.add_handler(
     CommandHandler("start", start_command)
 )
 
@@ -295,7 +326,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="MENA Content Agent",
-    version="0.3.2",
+    version="0.3.3",
     lifespan=lifespan
 )
 
@@ -305,7 +336,7 @@ async def root():
     return {
         "name": "MENA Content Agent",
         "status": "running",
-        "version": "0.3.2"
+        "version": "0.3.3"
     }
 
 
