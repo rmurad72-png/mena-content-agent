@@ -8,9 +8,15 @@ from telegram.ext import (
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    ConversationHandler,
+    MessageHandler,
+    filters,
 )
 
 from app.config import settings
+
+
+TITLE, CONTENT = range(2)
 
 
 telegram_app = (
@@ -103,6 +109,143 @@ async def help_command(
     )
 
 
+async def draft_start(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if update.message is None:
+        return ConversationHandler.END
+
+    if not is_admin(update):
+        await update.message.reply_text(
+            "Access denied."
+        )
+        return ConversationHandler.END
+
+    context.user_data.pop(
+        "draft_title",
+        None
+    )
+
+    context.user_data.pop(
+        "draft_content",
+        None
+    )
+
+    await update.message.reply_text(
+        "Please send the draft title."
+    )
+
+    return TITLE
+
+
+async def receive_title(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if update.message is None:
+        return ConversationHandler.END
+
+    title = update.message.text.strip()
+
+    if not title:
+        await update.message.reply_text(
+            "The title cannot be empty. Please send it again."
+        )
+        return TITLE
+
+    context.user_data["draft_title"] = title
+
+    await update.message.reply_text(
+        "Now send the draft content."
+    )
+
+    return CONTENT
+
+
+async def receive_content(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if update.message is None:
+        return ConversationHandler.END
+
+    content = update.message.text.strip()
+
+    if not content:
+        await update.message.reply_text(
+            "The content cannot be empty. Please send it again."
+        )
+        return CONTENT
+
+    context.user_data["draft_content"] = content
+
+    title = context.user_data.get(
+        "draft_title",
+        ""
+    )
+
+    preview_text = (
+        "Draft preview
+
+"
+        "Title: "
+        + title
+        + "
+
+"
+        + "Content:
+"
+        + content
+    )
+
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "Approve",
+                callback_data="approve_first"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "Reject",
+                callback_data="reject_draft"
+            )
+        ],
+    ]
+
+    await update.message.reply_text(
+        preview_text,
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
+
+    return ConversationHandler.END
+
+
+async def cancel_command(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    if update.message is None:
+        return ConversationHandler.END
+
+    context.user_data.pop(
+        "draft_title",
+        None
+    )
+
+    context.user_data.pop(
+        "draft_content",
+        None
+    )
+
+    await update.message.reply_text(
+        "Draft creation cancelled."
+    )
+
+    return ConversationHandler.END
+
+
 async def button_handler(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
@@ -122,29 +265,7 @@ async def button_handler(
 
     if query.data == "show_help":
         await query.edit_message_text(
-            "Commands: /start, /help, and /myid"
-        )
-        return
-
-    if query.data == "create_draft":
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "Approve",
-                    callback_data="approve_first"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "Reject",
-                    callback_data="reject_draft"
-                )
-            ],
-        ]
-
-        await query.edit_message_text(
-            "Test draft. Choose an action:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            "Commands: /start, /help, /myid, and /cancel"
         )
         return
 
@@ -171,12 +292,22 @@ async def button_handler(
         ]
 
         await query.edit_message_text(
-            "First approval completed. Choose a channel:",
+            "Approval completed. Choose a channel:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
 
     if query.data == "reject_draft":
+        context.user_data.pop(
+            "draft_title",
+            None
+        )
+
+        context.user_data.pop(
+            "draft_content",
+            None
+        )
+
         await query.edit_message_text(
             "Draft rejected."
         )
@@ -251,9 +382,22 @@ async def button_handler(
         return
 
     if query.data == "publish_now":
+        title = context.user_data.get(
+            "draft_title",
+            "Untitled draft"
+        )
+
+        content = context.user_data.get(
+            "draft_content",
+            ""
+        )
+
         draft_text = (
-            "Test publication from MENA Content Agent. "
-            "This is a Telegram publishing test."
+            title
+            + "
+
+"
+            + content
         )
 
         try:
@@ -262,13 +406,25 @@ async def button_handler(
                 text=draft_text
             )
 
+            context.user_data.pop(
+                "draft_title",
+                None
+            )
+
+            context.user_data.pop(
+                "draft_content",
+                None
+            )
+
             success_text = (
                 "Published successfully to Telegram. "
                 "Message ID: "
                 + str(sent_message.message_id)
             )
 
-            await query.edit_message_text(success_text)
+            await query.edit_message_text(
+                success_text
+            )
 
         except TelegramError as error:
             error_text = (
@@ -276,7 +432,9 @@ async def button_handler(
                 + str(error)
             )
 
-            await query.edit_message_text(error_text)
+            await query.edit_message_text(
+                error_text
+            )
 
         return
 
@@ -296,20 +454,65 @@ async def button_handler(
     )
 
 
+draft_conversation = ConversationHandler(
+    entry_points=[
+        CallbackQueryHandler(
+            draft_start,
+            pattern="^create_draft$"
+        )
+    ],
+    states={
+        TITLE: [
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND,
+                receive_title
+            )
+        ],
+        CONTENT: [
+            MessageHandler(
+                filters.TEXT & ~filters.COMMAND,
+                receive_content
+            )
+        ],
+    },
+    fallbacks=[
+        CommandHandler(
+            "cancel",
+            cancel_command
+        )
+    ],
+)
+
+
 telegram_app.add_handler(
-    CommandHandler("myid", myid_command)
+    CommandHandler(
+        "myid",
+        myid_command
+    )
 )
 
 telegram_app.add_handler(
-    CommandHandler("start", start_command)
+    CommandHandler(
+        "start",
+        start_command
+    )
 )
 
 telegram_app.add_handler(
-    CommandHandler("help", help_command)
+    CommandHandler(
+        "help",
+        help_command
+    )
 )
 
 telegram_app.add_handler(
-    CallbackQueryHandler(button_handler)
+    draft_conversation
+)
+
+telegram_app.add_handler(
+    CallbackQueryHandler(
+        button_handler
+    )
 )
 
 
@@ -326,7 +529,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="MENA Content Agent",
-    version="0.3.3",
+    version="0.4.0",
     lifespan=lifespan
 )
 
@@ -336,7 +539,7 @@ async def root():
     return {
         "name": "MENA Content Agent",
         "status": "running",
-        "version": "0.3.3"
+        "version": "0.4.0"
     }
 
 
