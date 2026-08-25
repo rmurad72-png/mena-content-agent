@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
@@ -13,11 +14,20 @@ from telegram.ext import (
     filters,
 )
 
+
 from app.config import settings
 
 
 TITLE, CONTENT, LINK, PHOTO = range(4)
 NEW_LINE = chr(10)
+
+
+logging.basicConfig(
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    level=logging.INFO,
+)
+
+logger = logging.getLogger(__name__)
 
 
 telegram_app = (
@@ -40,7 +50,12 @@ def is_admin(update: Update) -> bool:
 def clear_draft(
     context: ContextTypes.DEFAULT_TYPE
 ):
-    context.user_data.clear()
+    context.user_data.pop("draft_title", None)
+    context.user_data.pop("draft_content", None)
+    context.user_data.pop("draft_link", None)
+    context.user_data.pop("draft_photo_file_id", None)
+    context.user_data.pop("draft_photo_url", None)
+    context.user_data.pop("selected_channel", None)
 
 
 def build_post_text(
@@ -307,8 +322,7 @@ async def receive_content(
     context.user_data["draft_content"] = content
 
     await update.message.reply_text(
-        "أرسل رابط الموضوع أو المقالة، "
-        "أو اكتب /skip."
+        "أرسل رابط الموضوع أو المقالة، أو اكتب /skip."
     )
 
     return LINK
@@ -323,8 +337,7 @@ async def receive_link(
 
     if update.message.text is None:
         await update.message.reply_text(
-            "أرسل رابطًا يبدأ بـ http أو https، "
-            "أو اكتب /skip."
+            "أرسل رابطًا يبدأ بـ http أو https، أو اكتب /skip."
         )
         return LINK
 
@@ -337,8 +350,7 @@ async def receive_link(
         )
 
         await update.message.reply_text(
-            "أرسل صورة، أو رابط صورة، "
-            "أو اكتب /skip."
+            "أرسل صورة، أو رابط صورة، أو اكتب /skip."
         )
 
         return PHOTO
@@ -355,8 +367,7 @@ async def receive_link(
     context.user_data["draft_link"] = link
 
     await update.message.reply_text(
-        "أرسل صورة، أو رابط صورة، "
-        "أو اكتب /skip."
+        "أرسل صورة، أو رابط صورة، أو اكتب /skip."
     )
 
     return PHOTO
@@ -410,15 +421,13 @@ async def receive_photo(
 
         else:
             await update.message.reply_text(
-                "أرسل صورة، أو رابط صورة صحيح، "
-                "أو اكتب /skip."
+                "أرسل صورة، أو رابط صورة صحيح، أو اكتب /skip."
             )
             return PHOTO
 
     else:
         await update.message.reply_text(
-            "أرسل صورة، أو رابط صورة، "
-            "أو اكتب /skip."
+            "أرسل صورة، أو رابط صورة، أو اكتب /skip."
         )
         return PHOTO
 
@@ -486,8 +495,7 @@ async def receive_photo(
             )
         except TelegramError:
             await update.message.reply_text(
-                "تعذر تحميل رابط الصورة. "
-                "أرسل صورة أخرى أو اكتب /skip.",
+                "تعذر تحميل رابط الصورة.",
                 reply_markup=review_keyboard()
             )
 
@@ -649,6 +657,10 @@ async def button_handler(
             )
 
         except TelegramError as error:
+            logger.exception(
+                "Telegram publishing failed"
+            )
+
             await query.edit_message_text(
                 "فشل النشر على Telegram:"
                 + NEW_LINE
@@ -668,6 +680,16 @@ async def button_handler(
     await query.edit_message_text(
         "Unknown action. Callback: "
         + str(callback_data)
+    )
+
+
+async def error_handler(
+    update: object,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    logger.error(
+        "Exception while handling an update:",
+        exc_info=context.error
     )
 
 
@@ -751,6 +773,10 @@ telegram_app.add_handler(
     CallbackQueryHandler(
         button_handler
     )
+)
+
+telegram_app.add_error_handler(
+    error_handler
 )
 
 
