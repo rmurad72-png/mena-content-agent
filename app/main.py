@@ -37,6 +37,12 @@ def is_admin(update: Update) -> bool:
     return user.id in settings.admin_ids
 
 
+def clear_draft(
+    context: ContextTypes.DEFAULT_TYPE
+):
+    context.user_data.clear()
+
+
 def build_post_text(
     title: str,
     content: str,
@@ -62,18 +68,100 @@ def build_post_text(
     return post_text
 
 
-def get_preview_keyboard() -> InlineKeyboardMarkup:
+def review_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton(
-                "Approve",
+                "اعتماد المسودة",
                 callback_data="approve_first"
             )
         ],
         [
             InlineKeyboardButton(
-                "Reject",
+                "رفض المسودة",
                 callback_data="reject_draft"
+            )
+        ],
+    ]
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def start_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "إنشاء مسودة",
+                callback_data="create_draft"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "مساعدة",
+                callback_data="show_help"
+            )
+        ],
+    ]
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def channel_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "Telegram",
+                callback_data="channel_telegram"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "X",
+                callback_data="channel_x"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "Reddit",
+                callback_data="channel_reddit"
+            )
+        ],
+    ]
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def confirmation_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "تأكيد",
+                callback_data="final_confirm"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "إلغاء",
+                callback_data="cancel_publish"
+            )
+        ],
+    ]
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def publish_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "نشر الآن",
+                callback_data="publish_now"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "إلغاء",
+                callback_data="cancel_publish"
             )
         ],
     ]
@@ -92,12 +180,12 @@ async def myid_command(
 
     if user is None:
         await update.message.reply_text(
-            "User ID is unavailable."
+            "تعذر الحصول على رقم المستخدم."
         )
         return
 
     await update.message.reply_text(
-        "Your Telegram User ID is: "
+        "رقم Telegram الخاص بك هو: "
         + str(user.id)
     )
 
@@ -111,28 +199,13 @@ async def start_command(
 
     if not is_admin(update):
         await update.message.reply_text(
-            "Access denied. Send /myid to get your ID."
+            "غير مسموح. استخدم /myid لمعرفة رقم حسابك."
         )
         return
 
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "Create draft",
-                callback_data="create_draft"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "Help",
-                callback_data="show_help"
-            )
-        ],
-    ]
-
     await update.message.reply_text(
-        "Welcome to the content agent. Choose an action:",
-        reply_markup=InlineKeyboardMarkup(keyboard)
+        "مرحبًا بك. اختر إجراءً:",
+        reply_markup=start_keyboard()
     )
 
 
@@ -143,14 +216,14 @@ async def help_command(
     if update.message is None:
         return
 
-    if not is_admin(update):
-        await update.message.reply_text(
-            "Access denied. Send /myid to get your ID."
-        )
-        return
-
     await update.message.reply_text(
-        "Commands: /start, /help, /myid, and /cancel"
+        "الأوامر المتاحة:"
+        + NEW_LINE
+        + "/start - القائمة الرئيسية"
+        + NEW_LINE
+        + "/myid - عرض رقم الحساب"
+        + NEW_LINE
+        + "/cancel - إلغاء العملية الحالية"
     )
 
 
@@ -167,14 +240,14 @@ async def draft_start(
 
     if not is_admin(update):
         await query.edit_message_text(
-            "Access denied."
+            "غير مسموح."
         )
         return ConversationHandler.END
 
-    context.user_data.clear()
+    clear_draft(context)
 
     await query.edit_message_text(
-        "Please send the draft title."
+        "أرسل عنوان المسودة."
     )
 
     return TITLE
@@ -189,7 +262,7 @@ async def receive_title(
 
     if update.message.text is None:
         await update.message.reply_text(
-            "Please send text only."
+            "أرسل نصًا فقط."
         )
         return TITLE
 
@@ -197,14 +270,14 @@ async def receive_title(
 
     if not title:
         await update.message.reply_text(
-            "The title cannot be empty. Please send it again."
+            "العنوان لا يمكن أن يكون فارغًا."
         )
         return TITLE
 
     context.user_data["draft_title"] = title
 
     await update.message.reply_text(
-        "Now send the draft content."
+        "أرسل محتوى المسودة."
     )
 
     return CONTENT
@@ -219,7 +292,7 @@ async def receive_content(
 
     if update.message.text is None:
         await update.message.reply_text(
-            "Please send text only."
+            "أرسل نصًا فقط."
         )
         return CONTENT
 
@@ -227,14 +300,15 @@ async def receive_content(
 
     if not content:
         await update.message.reply_text(
-            "The content cannot be empty. Please send it again."
+            "المحتوى لا يمكن أن يكون فارغًا."
         )
         return CONTENT
 
     context.user_data["draft_content"] = content
 
     await update.message.reply_text(
-        "Send the topic or article URL, or type /skip."
+        "أرسل رابط الموضوع أو المقالة، "
+        "أو اكتب /skip."
     )
 
     return LINK
@@ -249,8 +323,8 @@ async def receive_link(
 
     if update.message.text is None:
         await update.message.reply_text(
-            "Send a URL starting with http or https, "
-            "or type /skip."
+            "أرسل رابطًا يبدأ بـ http أو https، "
+            "أو اكتب /skip."
         )
         return LINK
 
@@ -263,8 +337,8 @@ async def receive_link(
         )
 
         await update.message.reply_text(
-            "Now send a photo, send an image URL, "
-            "or type /skip."
+            "أرسل صورة، أو رابط صورة، "
+            "أو اكتب /skip."
         )
 
         return PHOTO
@@ -274,15 +348,15 @@ async def receive_link(
         or link.startswith("https://")
     ):
         await update.message.reply_text(
-            "Invalid URL. It must start with http:// or https://."
+            "الرابط غير صحيح. يجب أن يبدأ بـ http أو https."
         )
         return LINK
 
     context.user_data["draft_link"] = link
 
     await update.message.reply_text(
-        "Now send a photo, send an image URL, "
-        "or type /skip."
+        "أرسل صورة، أو رابط صورة، "
+        "أو اكتب /skip."
     )
 
     return PHOTO
@@ -295,15 +369,11 @@ async def receive_photo(
     if update.message is None:
         return ConversationHandler.END
 
-    photo_file_id = None
-    photo_url = None
-
     if update.message.photo:
         largest_photo = update.message.photo[-1]
-        photo_file_id = largest_photo.file_id
 
         context.user_data["draft_photo_file_id"] = (
-            photo_file_id
+            largest_photo.file_id
         )
 
         context.user_data.pop(
@@ -312,24 +382,9 @@ async def receive_photo(
         )
 
     elif update.message.text:
-        possible_url = update.message.text.strip()
+        photo_value = update.message.text.strip()
 
-        if (
-            possible_url.startswith("http://")
-            or possible_url.startswith("https://")
-        ):
-            photo_url = possible_url
-
-            context.user_data["draft_photo_url"] = (
-                photo_url
-            )
-
-            context.user_data.pop(
-                "draft_photo_file_id",
-                None
-            )
-
-        elif possible_url == "/skip":
+        if photo_value == "/skip":
             context.user_data.pop(
                 "draft_photo_file_id",
                 None
@@ -340,16 +395,30 @@ async def receive_photo(
                 None
             )
 
+        elif (
+            photo_value.startswith("http://")
+            or photo_value.startswith("https://")
+        ):
+            context.user_data["draft_photo_url"] = (
+                photo_value
+            )
+
+            context.user_data.pop(
+                "draft_photo_file_id",
+                None
+            )
+
         else:
             await update.message.reply_text(
-                "Send a photo, a valid image URL, "
-                "or type /skip."
+                "أرسل صورة، أو رابط صورة صحيح، "
+                "أو اكتب /skip."
             )
             return PHOTO
 
     else:
         await update.message.reply_text(
-            "Send a photo, an image URL, or type /skip."
+            "أرسل صورة، أو رابط صورة، "
+            "أو اكتب /skip."
         )
         return PHOTO
 
@@ -367,47 +436,65 @@ async def receive_photo(
         "draft_link"
     )
 
-    preview_text = build_post_text(
+    post_text = build_post_text(
         title,
         content,
         link
     )
 
-    preview_text = (
-        "Draft preview"
-        + NEW_LINE
-        + NEW_LINE
-        + preview_text
-        + NEW_LINE
-        + NEW_LINE
-        + "Photo: "
-        + ("included" if photo_file_id or photo_url else "none")
+    has_photo = bool(
+        context.user_data.get(
+            "draft_photo_file_id"
+        )
+        or context.user_data.get(
+            "draft_photo_url"
+        )
     )
 
-    if photo_file_id is not None:
+    preview_text = (
+        "معاينة المسودة:"
+        + NEW_LINE
+        + NEW_LINE
+        + post_text
+        + NEW_LINE
+        + NEW_LINE
+        + "الصورة: "
+        + ("موجودة" if has_photo else "غير موجودة")
+    )
+
+    photo_file_id = context.user_data.get(
+        "draft_photo_file_id"
+    )
+
+    photo_url = context.user_data.get(
+        "draft_photo_url"
+    )
+
+    if photo_file_id:
         await update.message.reply_photo(
             photo=photo_file_id,
             caption=preview_text,
-            reply_markup=get_preview_keyboard()
+            reply_markup=review_keyboard()
         )
 
-    elif photo_url is not None:
+    elif photo_url:
         try:
             await update.message.reply_photo(
                 photo=photo_url,
                 caption=preview_text,
-                reply_markup=get_preview_keyboard()
+                reply_markup=review_keyboard()
             )
         except TelegramError:
             await update.message.reply_text(
-                "The image URL could not be loaded.",
-                reply_markup=get_preview_keyboard()
+                "تعذر تحميل رابط الصورة. "
+                "أرسل صورة أخرى أو اكتب /skip.",
+                reply_markup=review_keyboard()
             )
 
     else:
         await update.message.reply_text(
             preview_text,
-            reply_markup=get_preview_keyboard()
+            reply_markup=review_keyboard()
         )
 
     return ConversationHandler.END
@@ -417,11 +504,11 @@ async def cancel_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    context.user_data.clear()
+    clear_draft(context)
 
     if update.message is not None:
         await update.message.reply_text(
-            "Draft creation cancelled."
+            "تم إلغاء العملية."
         )
 
     return ConversationHandler.END
@@ -440,54 +527,35 @@ async def button_handler(
 
     if not is_admin(update):
         await query.edit_message_text(
-            "Access denied."
+            "غير مسموح."
         )
         return
 
-    if query.data == "show_help":
+    callback_data = query.data
+
+    if callback_data == "show_help":
         await query.edit_message_text(
-            "Commands: /start, /help, /myid, and /cancel"
+            "استخدم /start لفتح القائمة الرئيسية."
         )
         return
 
-    if query.data == "approve_first":
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "Telegram",
-                    callback_data="channel_telegram"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "X",
-                    callback_data="channel_x"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "Reddit",
-                    callback_data="channel_reddit"
-                )
-            ],
-        ]
+    if callback_data == "approve_first":
+        await query.edit_message_text(
+            "تم اعتماد المسودة. اختر قناة النشر:",
+            reply_markup=channel_keyboard()
+        )
+        return
+
+    if callback_data == "reject_draft":
+        clear_draft(context)
 
         await query.edit_message_text(
-            "Approval completed. Choose a channel:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            "تم رفض المسودة."
         )
         return
 
-    if query.data == "reject_draft":
-        context.user_data.clear()
-
-        await query.edit_message_text(
-            "Draft rejected."
-        )
-        return
-
-    if query.data.startswith("channel_"):
-        channel_name = query.data.replace(
+    if callback_data.startswith("channel_"):
+        channel_name = callback_data.replace(
             "channel_",
             ""
         )
@@ -496,66 +564,35 @@ async def button_handler(
             channel_name
         )
 
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "Confirm",
-                    callback_data="final_confirm"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "Cancel",
-                    callback_data="cancel_publish"
-                )
-            ],
-        ]
-
         await query.edit_message_text(
-            "Selected channel: "
+            "القناة المختارة: "
             + channel_name
-            + ". Confirm before publishing:",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            + ". هل تريد المتابعة؟",
+            reply_markup=confirmation_keyboard()
         )
         return
 
-    if query.data == "final_confirm":
+    if callback_data == "final_confirm":
         selected_channel = context.user_data.get(
             "selected_channel"
         )
 
         if selected_channel != "telegram":
             await query.edit_message_text(
-                "Only Telegram publishing is enabled currently."
+                "النشر مفعّل حاليًا لقناة Telegram فقط."
             )
             return
 
-        keyboard = [
-            [
-                InlineKeyboardButton(
-                    "Publish now",
-                    callback_data="publish_now"
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    "Cancel",
-                    callback_data="cancel_publish"
-                )
-            ],
-        ]
-
         await query.edit_message_text(
-            "Final confirmation completed. "
-            "Publishing to Telegram is ready.",
-            reply_markup=InlineKeyboardMarkup(keyboard)
+            "تم التأكيد النهائي. اضغط نشر الآن:",
+            reply_markup=publish_keyboard()
         )
         return
 
-    if query.data == "publish_now":
+    if callback_data == "publish_now":
         title = context.user_data.get(
             "draft_title",
-            "Untitled draft"
+            "منشور بلا عنوان"
         )
 
         content = context.user_data.get(
@@ -602,42 +639,35 @@ async def button_handler(
                     text=post_text
                 )
 
-            context.user_data.clear()
+            clear_draft(context)
 
-            success_text = (
-                "Published successfully to Telegram."
+            await query.edit_message_text(
+                "تم النشر بنجاح على Telegram."
                 + NEW_LINE
-                + "Message ID: "
+                + "رقم المنشور: "
                 + str(sent_message.message_id)
             )
 
-            await query.edit_message_text(
-                success_text
-            )
-
         except TelegramError as error:
-            error_text = (
-                "Telegram publishing failed:"
+            await query.edit_message_text(
+                "فشل النشر على Telegram:"
                 + NEW_LINE
                 + str(error)
             )
 
-            await query.edit_message_text(
-                error_text
-            )
-
         return
 
-    if query.data == "cancel_publish":
-        context.user_data.clear()
+    if callback_data == "cancel_publish":
+        clear_draft(context)
 
         await query.edit_message_text(
-            "Operation cancelled."
+            "تم إلغاء النشر."
         )
         return
 
     await query.edit_message_text(
-        "Unknown action."
+        "Unknown action. Callback: "
+        + str(callback_data)
     )
 
 
@@ -688,6 +718,7 @@ draft_conversation = ConversationHandler(
             cancel_command
         )
     ],
+    allow_reentry=True
 )
 
 
