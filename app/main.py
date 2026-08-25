@@ -22,11 +22,7 @@ telegram_app = (
 
 def is_admin(update: Update) -> bool:
     user = update.effective_user
-
-    if user is None:
-        return False
-
-    return user.id in settings.admin_ids
+    return user is not None and user.id in settings.admin_ids
 
 
 async def start_command(
@@ -131,11 +127,7 @@ async def button_handler(
         ]
 
         await query.edit_message_text(
-            "مسودة تجريبية:
-
-"
-            "هذا نص تجريبي للمراجعة قبل النشر.
-
+            "مسودة تجريبية للمراجعة قبل النشر.
 "
             "اختر الإجراء:",
             reply_markup=InlineKeyboardMarkup(keyboard)
@@ -186,10 +178,9 @@ async def button_handler(
 
         await query.edit_message_text(
             "تم اختيار القناة: "
-            f"{channel_name}
-
-"
-            "الخطوة التالية ستكون التأكيد النهائي."
+            + channel_name
+            + "
+الخطوة التالية: التأكيد النهائي."
         )
         return
 
