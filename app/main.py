@@ -14,11 +14,10 @@ from telegram.ext import (
     filters,
 )
 
-
 from app.config import settings
 
 
-TITLE, CONTENT, LINK, PHOTO = range(4)
+TITLE, CONTENT, LINK, PHOTO, REVIEW, CHANNEL, CONFIRM = range(7)
 NEW_LINE = chr(10)
 
 
@@ -50,12 +49,20 @@ def is_admin(update: Update) -> bool:
 def clear_draft(
     context: ContextTypes.DEFAULT_TYPE
 ):
-    context.user_data.pop("draft_title", None)
-    context.user_data.pop("draft_content", None)
-    context.user_data.pop("draft_link", None)
-    context.user_data.pop("draft_photo_file_id", None)
-    context.user_data.pop("draft_photo_url", None)
-    context.user_data.pop("selected_channel", None)
+    keys = [
+        "draft_title",
+        "draft_content",
+        "draft_link",
+        "draft_photo_file_id",
+        "draft_photo_url",
+        "selected_channel",
+    ]
+
+    for key in keys:
+        context.user_data.pop(
+            key,
+            None
+        )
 
 
 def build_post_text(
@@ -63,7 +70,7 @@ def build_post_text(
     content: str,
     link: str | None
 ) -> str:
-    post_text = (
+    text = (
         title
         + NEW_LINE
         + NEW_LINE
@@ -71,8 +78,8 @@ def build_post_text(
     )
 
     if link:
-        post_text = (
-            post_text
+        text = (
+            text
             + NEW_LINE
             + NEW_LINE
             + "رابط الموضوع:"
@@ -80,26 +87,7 @@ def build_post_text(
             + link
         )
 
-    return post_text
-
-
-def review_keyboard() -> InlineKeyboardMarkup:
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "اعتماد المسودة",
-                callback_data="approve_first"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "رفض المسودة",
-                callback_data="reject_draft"
-            )
-        ],
-    ]
-
-    return InlineKeyboardMarkup(keyboard)
+    return text
 
 
 def start_keyboard() -> InlineKeyboardMarkup:
@@ -114,6 +102,25 @@ def start_keyboard() -> InlineKeyboardMarkup:
             InlineKeyboardButton(
                 "مساعدة",
                 callback_data="show_help"
+            )
+        ],
+    ]
+
+    return InlineKeyboardMarkup(keyboard)
+
+
+def review_keyboard() -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "اعتماد المسودة",
+                callback_data="approve_first"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "رفض المسودة",
+                callback_data="reject_draft"
             )
         ],
     ]
@@ -146,7 +153,7 @@ def channel_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-def confirmation_keyboard() -> InlineKeyboardMarkup:
+def confirm_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton(
@@ -182,6 +189,25 @@ def publish_keyboard() -> InlineKeyboardMarkup:
     ]
 
     return InlineKeyboardMarkup(keyboard)
+
+
+async def edit_callback_message(
+    query,
+    text: str,
+    reply_markup=None
+):
+    message = query.message
+
+    if message is not None and message.photo:
+        return await query.edit_message_caption(
+            caption=text,
+            reply_markup=reply_markup
+        )
+
+    return await query.edit_message_text(
+        text=text,
+        reply_markup=reply_markup
+    )
 
 
 async def myid_command(
@@ -238,7 +264,9 @@ async def help_command(
         + NEW_LINE
         + "/myid - عرض رقم الحساب"
         + NEW_LINE
-        + "/cancel - إلغاء العملية الحالية"
+        + "/help - المساعدة"
+        + NEW_LINE
+        + "/cancel - إلغاء العملية"
     )
 
 
@@ -254,14 +282,16 @@ async def draft_start(
     await query.answer()
 
     if not is_admin(update):
-        await query.edit_message_text(
+        await edit_callback_message(
+            query,
             "غير مسموح."
         )
         return ConversationHandler.END
 
     clear_draft(context)
 
-    await query.edit_message_text(
+    await edit_callback_message(
+        query,
         "أرسل عنوان المسودة."
     )
 
@@ -273,7 +303,7 @@ async def receive_title(
     context: ContextTypes.DEFAULT_TYPE
 ):
     if update.message is None:
-        return ConversationHandler.END
+        return TITLE
 
     if update.message.text is None:
         await update.message.reply_text(
@@ -303,7 +333,7 @@ async def receive_content(
     context: ContextTypes.DEFAULT_TYPE
 ):
     if update.message is None:
-        return ConversationHandler.END
+        return CONTENT
 
     if update.message.text is None:
         await update.message.reply_text(
@@ -333,7 +363,7 @@ async def receive_link(
     context: ContextTypes.DEFAULT_TYPE
 ):
     if update.message is None:
-        return ConversationHandler.END
+        return LINK
 
     if update.message.text is None:
         await update.message.reply_text(
@@ -349,22 +379,17 @@ async def receive_link(
             None
         )
 
-        await update.message.reply_text(
-            "أرسل صورة، أو رابط صورة، أو اكتب /skip."
-        )
-
-        return PHOTO
-
-    if not (
-        link.startswith("http://")
-        or link.startswith("https://")
+    elif link.startswith(
+        ("http://", "https://")
     ):
+        context.user_data["draft_link"] = link
+
+    else:
         await update.message.reply_text(
-            "الرابط غير صحيح. يجب أن يبدأ بـ http أو https."
+            "الرابط يجب أن يبدأ بـ http:// أو https://، "
+            "أو اكتب /skip."
         )
         return LINK
-
-    context.user_data["draft_link"] = link
 
     await update.message.reply_text(
         "أرسل صورة، أو رابط صورة، أو اكتب /skip."
@@ -378,7 +403,7 @@ async def receive_photo(
     context: ContextTypes.DEFAULT_TYPE
 ):
     if update.message is None:
-        return ConversationHandler.END
+        return PHOTO
 
     if update.message.photo:
         largest_photo = update.message.photo[-1]
@@ -393,9 +418,9 @@ async def receive_photo(
         )
 
     elif update.message.text:
-        photo_value = update.message.text.strip()
+        value = update.message.text.strip()
 
-        if photo_value == "/skip":
+        if value == "/skip":
             context.user_data.pop(
                 "draft_photo_file_id",
                 None
@@ -406,13 +431,10 @@ async def receive_photo(
                 None
             )
 
-        elif (
-            photo_value.startswith("http://")
-            or photo_value.startswith("https://")
+        elif value.startswith(
+            ("http://", "https://")
         ):
-            context.user_data["draft_photo_url"] = (
-                photo_value
-            )
+            context.user_data["draft_photo_url"] = value
 
             context.user_data.pop(
                 "draft_photo_file_id",
@@ -421,16 +443,28 @@ async def receive_photo(
 
         else:
             await update.message.reply_text(
-                "أرسل صورة، أو رابط صورة صحيح، أو اكتب /skip."
+                "أرسل صورة أو رابط صورة صحيح أو اكتب /skip."
             )
             return PHOTO
 
     else:
         await update.message.reply_text(
-            "أرسل صورة، أو رابط صورة، أو اكتب /skip."
+            "أرسل صورة أو رابط صورة أو اكتب /skip."
         )
         return PHOTO
 
+    await send_preview(
+        update,
+        context
+    )
+
+    return REVIEW
+
+
+async def send_preview(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
     title = context.user_data.get(
         "draft_title",
         ""
@@ -445,6 +479,14 @@ async def receive_photo(
         "draft_link"
     )
 
+    photo_file_id = context.user_data.get(
+        "draft_photo_file_id"
+    )
+
+    photo_url = context.user_data.get(
+        "draft_photo_url"
+    )
+
     post_text = build_post_text(
         title,
         content,
@@ -452,12 +494,8 @@ async def receive_photo(
     )
 
     has_photo = bool(
-        context.user_data.get(
-            "draft_photo_file_id"
-        )
-        or context.user_data.get(
-            "draft_photo_url"
-        )
+        photo_file_id
+        or photo_url
     )
 
     preview_text = (
@@ -471,6 +509,174 @@ async def receive_photo(
         + ("موجودة" if has_photo else "غير موجودة")
     )
 
+    keyboard = review_keyboard()
+
+    if update.message is None:
+        return
+
+    if photo_file_id:
+        await update.message.reply_photo(
+            photo=photo_file_id,
+            caption=preview_text,
+            reply_markup=keyboard
+        )
+        return
+
+    if photo_url:
+        try:
+            await update.message.reply_photo(
+                photo=photo_url,
+                caption=preview_text,
+                reply_markup=keyboard
+            )
+            return
+
+        except TelegramError:
+            logger.exception(
+                "Could not load image URL"
+            )
+
+    await update.message.reply_text(
+        preview_text,
+        reply_markup=keyboard
+    )
+
+
+async def approve_draft(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+
+    if query is None:
+        return CHANNEL
+
+    await query.answer()
+
+    if not is_admin(update):
+        await edit_callback_message(
+            query,
+            "غير مسموح."
+        )
+        return ConversationHandler.END
+
+    await edit_callback_message(
+        query,
+        "تم اعتماد المسودة. اختر قناة النشر:",
+        reply_markup=channel_keyboard()
+    )
+
+    return CHANNEL
+
+
+async def reject_draft(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+
+    if query is None:
+        return ConversationHandler.END
+
+    await query.answer()
+
+    clear_draft(context)
+
+    await edit_callback_message(
+        query,
+        "تم رفض المسودة."
+    )
+
+    return ConversationHandler.END
+
+
+async def choose_channel(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+
+    if query is None:
+        return CHANNEL
+
+    await query.answer()
+
+    channel_name = query.data.replace(
+        "channel_",
+        ""
+    )
+
+    context.user_data["selected_channel"] = (
+        channel_name
+    )
+
+    await edit_callback_message(
+        query,
+        "القناة المختارة: "
+        + channel_name
+        + ". هل تريد المتابعة؟",
+        reply_markup=confirm_keyboard()
+    )
+
+    return CONFIRM
+
+
+async def final_confirm(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+
+    if query is None:
+        return CONFIRM
+
+    await query.answer()
+
+    selected_channel = context.user_data.get(
+        "selected_channel"
+    )
+
+    if selected_channel != "telegram":
+        await edit_callback_message(
+            query,
+            "النشر مفعّل حاليًا لقناة Telegram فقط."
+        )
+        return CONFIRM
+
+    await edit_callback_message(
+        query,
+        "تم التأكيد النهائي. اضغط نشر الآن:",
+        reply_markup=publish_keyboard()
+    )
+
+    return CONFIRM
+
+
+async def publish_now(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+
+    if query is None:
+        return CONFIRM
+
+    await query.answer()
+
+    title = context.user_data.get(
+        "draft_title",
+        "منشور بلا عنوان"
+    )
+
+    content = context.user_data.get(
+        "draft_content",
+        ""
+    )
+
+    link = context.user_data.get(
+        "draft_link"
+    )
+
     photo_file_id = context.user_data.get(
         "draft_photo_file_id"
     )
@@ -479,31 +685,77 @@ async def receive_photo(
         "draft_photo_url"
     )
 
-    if photo_file_id:
-        await update.message.reply_photo(
-            photo=photo_file_id,
-            caption=preview_text,
-            reply_markup=review_keyboard()
-        )
+    post_text = build_post_text(
+        title,
+        content,
+        link
+    )
 
-    elif photo_url:
-        try:
-            await update.message.reply_photo(
+    try:
+        if photo_file_id:
+            sent_message = await context.bot.send_photo(
+                chat_id=settings.telegram_channel_id,
+                photo=photo_file_id,
+                caption=post_text
+            )
+
+        elif photo_url:
+            sent_message = await context.bot.send_photo(
+                chat_id=settings.telegram_channel_id,
                 photo=photo_url,
-                caption=preview_text,
-                reply_markup=review_keyboard()
-            )
-        except TelegramError:
-            await update.message.reply_text(
-                "تعذر تحميل رابط الصورة.",
-                reply_markup=review_keyboard()
+                caption=post_text
             )
 
-    else:
-        await update.message.reply_text(
-            preview_text,
-            reply_markup=review_keyboard()
+        else:
+            sent_message = await context.bot.send_message(
+                chat_id=settings.telegram_channel_id,
+                text=post_text
+            )
+
+        message_id = sent_message.message_id
+
+        clear_draft(context)
+
+        await edit_callback_message(
+            query,
+            "تم النشر بنجاح على Telegram."
+            + NEW_LINE
+            + "رقم المنشور: "
+            + str(message_id)
         )
+
+        return ConversationHandler.END
+
+    except TelegramError as error:
+        logger.exception(
+            "Publishing failed"
+        )
+
+        await edit_callback_message(
+            query,
+            "فشل النشر على Telegram:"
+            + NEW_LINE
+            + str(error)
+        )
+
+        return CONFIRM
+
+
+async def cancel_publish(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+
+    if query is not None:
+        await query.answer()
+
+        await edit_callback_message(
+            query,
+            "تم إلغاء العملية."
+        )
+
+    clear_draft(context)
 
     return ConversationHandler.END
 
@@ -520,167 +772,6 @@ async def cancel_command(
         )
 
     return ConversationHandler.END
-
-
-async def button_handler(
-    update: Update,
-    context: ContextTypes.DEFAULT_TYPE
-):
-    query = update.callback_query
-
-    if query is None:
-        return
-
-    await query.answer()
-
-    if not is_admin(update):
-        await query.edit_message_text(
-            "غير مسموح."
-        )
-        return
-
-    callback_data = query.data
-
-    if callback_data == "show_help":
-        await query.edit_message_text(
-            "استخدم /start لفتح القائمة الرئيسية."
-        )
-        return
-
-    if callback_data == "approve_first":
-        await query.edit_message_text(
-            "تم اعتماد المسودة. اختر قناة النشر:",
-            reply_markup=channel_keyboard()
-        )
-        return
-
-    if callback_data == "reject_draft":
-        clear_draft(context)
-
-        await query.edit_message_text(
-            "تم رفض المسودة."
-        )
-        return
-
-    if callback_data.startswith("channel_"):
-        channel_name = callback_data.replace(
-            "channel_",
-            ""
-        )
-
-        context.user_data["selected_channel"] = (
-            channel_name
-        )
-
-        await query.edit_message_text(
-            "القناة المختارة: "
-            + channel_name
-            + ". هل تريد المتابعة؟",
-            reply_markup=confirmation_keyboard()
-        )
-        return
-
-    if callback_data == "final_confirm":
-        selected_channel = context.user_data.get(
-            "selected_channel"
-        )
-
-        if selected_channel != "telegram":
-            await query.edit_message_text(
-                "النشر مفعّل حاليًا لقناة Telegram فقط."
-            )
-            return
-
-        await query.edit_message_text(
-            "تم التأكيد النهائي. اضغط نشر الآن:",
-            reply_markup=publish_keyboard()
-        )
-        return
-
-    if callback_data == "publish_now":
-        title = context.user_data.get(
-            "draft_title",
-            "منشور بلا عنوان"
-        )
-
-        content = context.user_data.get(
-            "draft_content",
-            ""
-        )
-
-        link = context.user_data.get(
-            "draft_link"
-        )
-
-        photo_file_id = context.user_data.get(
-            "draft_photo_file_id"
-        )
-
-        photo_url = context.user_data.get(
-            "draft_photo_url"
-        )
-
-        post_text = build_post_text(
-            title,
-            content,
-            link
-        )
-
-        try:
-            if photo_file_id:
-                sent_message = await context.bot.send_photo(
-                    chat_id=settings.telegram_channel_id,
-                    photo=photo_file_id,
-                    caption=post_text
-                )
-
-            elif photo_url:
-                sent_message = await context.bot.send_photo(
-                    chat_id=settings.telegram_channel_id,
-                    photo=photo_url,
-                    caption=post_text
-                )
-
-            else:
-                sent_message = await context.bot.send_message(
-                    chat_id=settings.telegram_channel_id,
-                    text=post_text
-                )
-
-            clear_draft(context)
-
-            await query.edit_message_text(
-                "تم النشر بنجاح على Telegram."
-                + NEW_LINE
-                + "رقم المنشور: "
-                + str(sent_message.message_id)
-            )
-
-        except TelegramError as error:
-            logger.exception(
-                "Telegram publishing failed"
-            )
-
-            await query.edit_message_text(
-                "فشل النشر على Telegram:"
-                + NEW_LINE
-                + str(error)
-            )
-
-        return
-
-    if callback_data == "cancel_publish":
-        clear_draft(context)
-
-        await query.edit_message_text(
-            "تم إلغاء النشر."
-        )
-        return
-
-    await query.edit_message_text(
-        "Unknown action. Callback: "
-        + str(callback_data)
-    )
 
 
 async def error_handler(
@@ -725,12 +816,38 @@ draft_conversation = ConversationHandler(
                 receive_photo
             ),
             MessageHandler(
-                filters.TEXT & filters.COMMAND,
+                filters.TEXT,
                 receive_photo
             ),
-            MessageHandler(
-                filters.TEXT & ~filters.COMMAND,
-                receive_photo
+        ],
+        REVIEW: [
+            CallbackQueryHandler(
+                approve_draft,
+                pattern="^approve_first$"
+            ),
+            CallbackQueryHandler(
+                reject_draft,
+                pattern="^reject_draft$"
+            ),
+        ],
+        CHANNEL: [
+            CallbackQueryHandler(
+                choose_channel,
+                pattern="^channel_(telegram|x|reddit)$"
+            ),
+        ],
+        CONFIRM: [
+            CallbackQueryHandler(
+                final_confirm,
+                pattern="^final_confirm$"
+            ),
+            CallbackQueryHandler(
+                publish_now,
+                pattern="^publish_now$"
+            ),
+            CallbackQueryHandler(
+                cancel_publish,
+                pattern="^cancel_publish$"
             ),
         ],
     },
@@ -769,12 +886,6 @@ telegram_app.add_handler(
     draft_conversation
 )
 
-telegram_app.add_handler(
-    CallbackQueryHandler(
-        button_handler
-    )
-)
-
 telegram_app.add_error_handler(
     error_handler
 )
@@ -793,7 +904,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="MENA Content Agent",
-    version="0.5.1",
+    version="0.5.3",
     lifespan=lifespan
 )
 
@@ -803,7 +914,7 @@ async def root():
     return {
         "name": "MENA Content Agent",
         "status": "running",
-        "version": "0.5.1"
+        "version": "0.5.3"
     }
 
 
