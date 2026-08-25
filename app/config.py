@@ -1,19 +1,16 @@
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     bot_token: str
-    telegram_webhook_secret: str
-    admin_user_ids: str = ""
+    admin_ids: list[int] = []
     environment: str = "production"
+    telegram_channel_id: str
 
-    @property
-    def admin_ids(self) -> set[int]:
-        return {
-            int(value.strip())
-            for value in self.admin_user_ids.split(",")
-            if value.strip()
-        }
+    model_config = SettingsConfigDict(
+        case_sensitive=False,
+        extra="ignore"
+    )
 
 
 settings = Settings()
