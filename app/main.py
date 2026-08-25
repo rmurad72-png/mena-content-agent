@@ -22,7 +22,11 @@ telegram_app = (
 
 def is_admin(update: Update) -> bool:
     user = update.effective_user
-    return user is not None and user.id in settings.admin_ids
+
+    if user is None:
+        return False
+
+    return user.id in settings.admin_ids
 
 
 async def start_command(
@@ -34,29 +38,27 @@ async def start_command(
 
     if not is_admin(update):
         await update.message.reply_text(
-            "غير مصرح لك باستخدام هذا البوت."
+            "Access denied."
         )
         return
 
     keyboard = [
         [
             InlineKeyboardButton(
-                "إنشاء مسودة تجريبية",
+                "Create draft",
                 callback_data="create_draft"
             )
         ],
         [
             InlineKeyboardButton(
-                "المساعدة",
+                "Help",
                 callback_data="show_help"
             )
         ],
     ]
 
     await update.message.reply_text(
-        "مرحبًا بك في وكيل المحتوى الذكي.
-"
-        "اختر إجراءً:",
+        "Welcome to the content agent. Choose an action:",
         reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
@@ -70,16 +72,12 @@ async def help_command(
 
     if not is_admin(update):
         await update.message.reply_text(
-            "غير مصرح لك باستخدام هذا البوت."
+            "Access denied."
         )
         return
 
     await update.message.reply_text(
-        "الأوامر المتاحة:
-"
-        "/start - بدء تشغيل البوت
-"
-        "/help - عرض المساعدة"
+        "Commands: /start and /help"
     )
 
 
@@ -96,17 +94,13 @@ async def button_handler(
 
     if not is_admin(update):
         await query.edit_message_text(
-            "غير مصرح لك باستخدام هذا البوت."
+            "Access denied."
         )
         return
 
     if query.data == "show_help":
         await query.edit_message_text(
-            "الأوامر المتاحة:
-"
-            "/start - بدء تشغيل البوت
-"
-            "/help - عرض المساعدة"
+            "Commands: /start and /help"
         )
         return
 
@@ -114,22 +108,20 @@ async def button_handler(
         keyboard = [
             [
                 InlineKeyboardButton(
-                    "موافقة أولى",
+                    "Approve",
                     callback_data="approve_first"
                 )
             ],
             [
                 InlineKeyboardButton(
-                    "رفض المسودة",
+                    "Reject",
                     callback_data="reject_draft"
                 )
             ],
         ]
 
         await query.edit_message_text(
-            "مسودة تجريبية للمراجعة قبل النشر.
-"
-            "اختر الإجراء:",
+            "Test draft. Choose an action:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
@@ -157,16 +149,14 @@ async def button_handler(
         ]
 
         await query.edit_message_text(
-            "تمت الموافقة الأولى.
-"
-            "اختر القناة:",
+            "First approval completed. Choose a channel:",
             reply_markup=InlineKeyboardMarkup(keyboard)
         )
         return
 
     if query.data == "reject_draft":
         await query.edit_message_text(
-            "تم رفض المسودة التجريبية."
+            "Draft rejected."
         )
         return
 
@@ -177,15 +167,14 @@ async def button_handler(
         )
 
         await query.edit_message_text(
-            "تم اختيار القناة: "
+            "Selected channel: "
             + channel_name
-            + "
-الخطوة التالية: التأكيد النهائي."
+            + ". Next step: final confirmation."
         )
         return
 
     await query.edit_message_text(
-        "إجراء غير معروف."
+        "Unknown action."
     )
 
 
