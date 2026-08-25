@@ -1,8 +1,13 @@
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
-from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.ext import (
+    Application,
+    CallbackQueryHandler,
+    CommandHandler,
+    ContextTypes,
+)
 
 from app.config import settings
 
@@ -37,8 +42,26 @@ async def start_command(
         )
         return
 
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                "إنشاء مسودة تجريبية",
+                callback_data="create_draft"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                "المساعدة",
+                callback_data="show_help"
+            )
+        ],
+    ]
+
     await update.message.reply_text(
-        "مرحبًا بك في وكيل المحتوى الذكي."
+        "مرحبًا بك في وكيل المحتوى الذكي.
+"
+        "اختر إجراءً:",
+        reply_markup=InlineKeyboardMarkup(keyboard)
     )
 
 
@@ -56,7 +79,122 @@ async def help_command(
         return
 
     await update.message.reply_text(
-        "الأوامر المتاحة: /start و /help"
+        "الأوامر المتاحة:
+"
+        "/start - بدء تشغيل البوت
+"
+        "/help - عرض المساعدة"
+    )
+
+
+async def button_handler(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE
+):
+    query = update.callback_query
+
+    if query is None:
+        return
+
+    await query.answer()
+
+    if not is_admin(update):
+        await query.edit_message_text(
+            "غير مصرح لك باستخدام هذا البوت."
+        )
+        return
+
+    if query.data == "show_help":
+        await query.edit_message_text(
+            "الأوامر المتاحة:
+"
+            "/start - بدء تشغيل البوت
+"
+            "/help - عرض المساعدة"
+        )
+        return
+
+    if query.data == "create_draft":
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "موافقة أولى",
+                    callback_data="approve_first"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "رفض المسودة",
+                    callback_data="reject_draft"
+                )
+            ],
+        ]
+
+        await query.edit_message_text(
+            "مسودة تجريبية:
+
+"
+            "هذا نص تجريبي للمراجعة قبل النشر.
+
+"
+            "اختر الإجراء:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    if query.data == "approve_first":
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "Telegram",
+                    callback_data="channel_telegram"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "X",
+                    callback_data="channel_x"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Reddit",
+                    callback_data="channel_reddit"
+                )
+            ],
+        ]
+
+        await query.edit_message_text(
+            "تمت الموافقة الأولى.
+"
+            "اختر القناة:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    if query.data == "reject_draft":
+        await query.edit_message_text(
+            "تم رفض المسودة التجريبية."
+        )
+        return
+
+    if query.data.startswith("channel_"):
+        channel_name = query.data.replace(
+            "channel_",
+            ""
+        )
+
+        await query.edit_message_text(
+            "تم اختيار القناة: "
+            f"{channel_name}
+
+"
+            "الخطوة التالية ستكون التأكيد النهائي."
+        )
+        return
+
+    await query.edit_message_text(
+        "إجراء غير معروف."
     )
 
 
@@ -66,6 +204,10 @@ telegram_app.add_handler(
 
 telegram_app.add_handler(
     CommandHandler("help", help_command)
+)
+
+telegram_app.add_handler(
+    CallbackQueryHandler(button_handler)
 )
 
 
@@ -82,7 +224,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="MENA Content Agent",
-    version="0.1.0",
+    version="0.2.0",
     lifespan=lifespan,
 )
 
@@ -92,7 +234,7 @@ async def root():
     return {
         "name": "MENA Content Agent",
         "status": "running",
-        "version": "0.1.0"
+        "version": "0.2.0"
     }
 
 
