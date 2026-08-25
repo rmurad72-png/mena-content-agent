@@ -17,6 +17,7 @@ from app.config import settings
 
 
 TITLE, CONTENT = range(2)
+NEW_LINE = chr(10)
 
 
 telegram_app = (
@@ -105,7 +106,7 @@ async def help_command(
         return
 
     await update.message.reply_text(
-        "Commands: /start, /help, and /myid"
+        "Commands: /start, /help, /myid, and /cancel"
     )
 
 
@@ -113,26 +114,22 @@ async def draft_start(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    if update.message is None:
+    query = update.callback_query
+
+    if query is None:
         return ConversationHandler.END
 
+    await query.answer()
+
     if not is_admin(update):
-        await update.message.reply_text(
+        await query.edit_message_text(
             "Access denied."
         )
         return ConversationHandler.END
 
-    context.user_data.pop(
-        "draft_title",
-        None
-    )
+    context.user_data.clear()
 
-    context.user_data.pop(
-        "draft_content",
-        None
-    )
-
-    await update.message.reply_text(
+    await query.edit_message_text(
         "Please send the draft title."
     )
 
@@ -145,6 +142,12 @@ async def receive_title(
 ):
     if update.message is None:
         return ConversationHandler.END
+
+    if update.message.text is None:
+        await update.message.reply_text(
+            "Please send text only."
+        )
+        return TITLE
 
     title = update.message.text.strip()
 
@@ -170,6 +173,12 @@ async def receive_content(
     if update.message is None:
         return ConversationHandler.END
 
+    if update.message.text is None:
+        await update.message.reply_text(
+            "Please send text only."
+        )
+        return CONTENT
+
     content = update.message.text.strip()
 
     if not content:
@@ -186,16 +195,15 @@ async def receive_content(
     )
 
     preview_text = (
-        "Draft preview
-
-"
-        "Title: "
+        "Draft preview"
+        + NEW_LINE
+        + NEW_LINE
+        + "Title: "
         + title
-        + "
-
-"
-        + "Content:
-"
+        + NEW_LINE
+        + NEW_LINE
+        + "Content:"
+        + NEW_LINE
         + content
     )
 
@@ -226,22 +234,12 @@ async def cancel_command(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE
 ):
-    if update.message is None:
-        return ConversationHandler.END
+    context.user_data.clear()
 
-    context.user_data.pop(
-        "draft_title",
-        None
-    )
-
-    context.user_data.pop(
-        "draft_content",
-        None
-    )
-
-    await update.message.reply_text(
-        "Draft creation cancelled."
-    )
+    if update.message is not None:
+        await update.message.reply_text(
+            "Draft creation cancelled."
+        )
 
     return ConversationHandler.END
 
@@ -298,15 +296,7 @@ async def button_handler(
         return
 
     if query.data == "reject_draft":
-        context.user_data.pop(
-            "draft_title",
-            None
-        )
-
-        context.user_data.pop(
-            "draft_content",
-            None
-        )
+        context.user_data.clear()
 
         await query.edit_message_text(
             "Draft rejected."
@@ -394,9 +384,8 @@ async def button_handler(
 
         draft_text = (
             title
-            + "
-
-"
+            + NEW_LINE
+            + NEW_LINE
             + content
         )
 
@@ -406,15 +395,7 @@ async def button_handler(
                 text=draft_text
             )
 
-            context.user_data.pop(
-                "draft_title",
-                None
-            )
-
-            context.user_data.pop(
-                "draft_content",
-                None
-            )
+            context.user_data.clear()
 
             success_text = (
                 "Published successfully to Telegram. "
@@ -439,10 +420,7 @@ async def button_handler(
         return
 
     if query.data == "cancel_publish":
-        context.user_data.pop(
-            "selected_channel",
-            None
-        )
+        context.user_data.clear()
 
         await query.edit_message_text(
             "Operation cancelled."
@@ -529,7 +507,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="MENA Content Agent",
-    version="0.4.0",
+    version="0.4.1",
     lifespan=lifespan
 )
 
@@ -539,7 +517,7 @@ async def root():
     return {
         "name": "MENA Content Agent",
         "status": "running",
-        "version": "0.4.0"
+        "version": "0.4.1"
     }
 
 
@@ -562,4 +540,6 @@ async def telegram_webhook(request: Request):
 
     await telegram_app.process_update(update)
 
-    return Response(status_code=200)
+    return Response(
+        status_code=200
+)
