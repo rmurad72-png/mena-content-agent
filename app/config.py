@@ -3,11 +3,11 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "MENA Content Agent"
-    environment: str = "development"
+    environment: str = "production"
     bot_token: str
     telegram_webhook_secret: str
     admin_user_ids: str = ""
-    database_url: str
+    database_url: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     def admin_ids(self) -> set[int]:
         if not self.admin_user_ids.strip():
             return set()
+
         return {
             int(value.strip())
             for value in self.admin_user_ids.split(",")
