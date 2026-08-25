@@ -7,7 +7,6 @@ class Settings(BaseSettings):
     bot_token: str
     telegram_webhook_secret: str
     admin_user_ids: str = ""
-    database_url: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",
