@@ -166,10 +166,61 @@ async def button_handler(
             ""
         )
 
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "Confirm",
+                    callback_data="final_confirm"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Cancel",
+                    callback_data="cancel_publish"
+                )
+            ],
+        ]
+
         await query.edit_message_text(
             "Selected channel: "
             + channel_name
-            + ". Next step: final confirmation."
+            + ". Confirm before publishing:",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    if query.data == "final_confirm":
+        keyboard = [
+            [
+                InlineKeyboardButton(
+                    "Publish now",
+                    callback_data="publish_now"
+                )
+            ],
+            [
+                InlineKeyboardButton(
+                    "Cancel",
+                    callback_data="cancel_publish"
+                )
+            ],
+        ]
+
+        await query.edit_message_text(
+            "Final confirmation completed. "
+            "Publishing is still disabled in this test version.",
+            reply_markup=InlineKeyboardMarkup(keyboard)
+        )
+        return
+
+    if query.data == "publish_now":
+        await query.edit_message_text(
+            "Publishing is disabled in the test version."
+        )
+        return
+
+    if query.data == "cancel_publish":
+        await query.edit_message_text(
+            "Operation cancelled."
         )
         return
 
@@ -204,7 +255,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="MENA Content Agent",
-    version="0.2.0",
+    version="0.3.0",
     lifespan=lifespan,
 )
 
@@ -214,7 +265,7 @@ async def root():
     return {
         "name": "MENA Content Agent",
         "status": "running",
-        "version": "0.2.0"
+        "version": "0.3.0"
     }
 
 
