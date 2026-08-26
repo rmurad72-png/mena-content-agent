@@ -6,10 +6,11 @@ class Settings(BaseSettings):
     admin_ids: list[int] = []
     environment: str = "production"
     telegram_channel_id: str
+    database_url: str | None = None
 
     model_config = SettingsConfigDict(
         case_sensitive=False,
-        extra="ignore"
+        extra="ignore",
     )
 
 
