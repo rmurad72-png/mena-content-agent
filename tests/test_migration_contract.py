@@ -3,6 +3,12 @@ from pathlib import Path
 MIGRATION = Path(__file__).resolve().parents[1] / "alembic" / "versions" / "001_phase1_workspace_brand_rbac.py"
 
 
+def test_authoritative_migration_contains_brand_voice_composite_unique_key():
+    text = MIGRATION.read_text()
+    assert '"uq_brand_voices_id_brand"' in text
+    assert 'sa.UniqueConstraint("id", "brand_id", name="uq_brand_voices_id_brand")' in text
+
+
 def test_authoritative_migration_contains_brand_scoped_voice_fk():
     text = MIGRATION.read_text()
     assert '["voice_id", "brand_id"]' in text

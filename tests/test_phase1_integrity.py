@@ -28,6 +28,16 @@ def test_brand_voice_has_one_default_per_brand_contract():
     assert str(indexes[0].dialect_options["postgresql"].get("where")) == "brand_voices.is_default IS true"
 
 
+def test_brand_voice_has_composite_unique_key_for_brand_scoped_fk():
+    table = Base.metadata.tables["brand_voices"]
+    assert any(
+        isinstance(c, UniqueConstraint)
+        and tuple(c.columns.keys()) == ("id", "brand_id")
+        and c.name == "uq_brand_voices_id_brand"
+        for c in table.constraints
+    )
+
+
 def test_brand_platform_profile_voice_is_brand_scoped():
     table = Base.metadata.tables["brand_platform_profiles"]
     fks = {tuple(f.column_keys) for f in table.foreign_key_constraints}
