@@ -1,65 +1,54 @@
 # MENA Content Agent
 
-AI content planning and review system for Telegram, X, Reddit, YouTube, Instagram, and LinkedIn.
+AI content planning, brand governance, review, and publishing foundation for Telegram, X, Reddit, YouTube, Instagram, and LinkedIn.
 
-## Phase 1
+## Current release
 
-Phase 1 introduces the PostgreSQL domain foundation for:
+This repository contains the authoritative Phase 1 database foundation. It is designed around strict Workspace and Brand isolation and is the source of truth for subsequent phases.
+
+### Domain foundation
 
 - Workspace and team membership
-- Workspace-scoped roles and permissions
-- Brand-scoped roles and permissions
-- Independent brands inside a workspace
+- Workspace-scoped and Brand-scoped RBAC
+- Independent Brands inside a Workspace
 - Brand identity, voice, audience, rules, and terminology
-- Platform definitions
-- Brand-specific platform publishing profiles
-- Multiple platform accounts per brand
-- Cross-workspace and cross-brand integrity constraints
+- Brand-specific platform profiles
+- Multiple publishing accounts per Brand
+- Instagram and LinkedIn included in the platform registry
+- Cross-workspace and cross-brand integrity enforced at the database level
+- Arabic as the default language, with English supported where explicitly configured
 
 ### Database
 
-PostgreSQL is required.
+PostgreSQL is required. Railway can provide `DATABASE_URL` using either `postgres://` or `postgresql://`; the application normalizes these to the `psycopg` SQLAlchemy driver.
 
-Set:
+### Migration safety
 
-```text
-DATABASE_URL=postgresql://...
-```
-
-The application accepts Railway's `postgres://` and `postgresql://` forms and normalizes them to the `psycopg` SQLAlchemy driver.
-
-### Migration
-
-Install dependencies, then run:
+Migrations are **not** executed during application startup. Run them deliberately after PostgreSQL connectivity and SQL review have passed:
 
 ```bash
 alembic upgrade head
 ```
 
-To inspect the SQL without applying it:
+Offline SQL review:
 
 ```bash
-alembic upgrade head --sql
+DATABASE_URL=postgresql://user:pass@host:5432/db alembic upgrade head --sql
 ```
 
 ### Verification
 
-Run:
-
 ```bash
+python -m compileall -q app alembic tests
 pytest -q
 ```
 
-The Phase 1 schema tests verify:
+The tests cover model registration, tenant foreign keys, Brand/Voice isolation, language constraints, default-voice uniqueness, platform-account boundaries, and database configuration/health behavior.
 
-- expected tables are registered
-- tenant keys exist
-- brand-scoped assignments use composite cross-tenant foreign keys
-- platform accounts cannot cross a brand/workspace boundary
-- brand platform profiles are unique per brand/platform/language
+### Important scope boundary
 
-## Architecture rule
+AI provider routing, research provenance, content versions, evaluation runs, publication idempotency, retries, budgets, cost accounting, analytics, and full database-backed authorization are **not fabricated into Phase 1**. They remain explicit architectural requirements for the next domain phases and must be designed before implementation.
 
-Phase 1 does not modify `app/main.py` or automatically run migrations during application startup. This is intentional: the database foundation is introduced without changing the existing Telegram/FastAPI runtime behavior.
+## Deployment rule
 
-The next phase will add database-backed services and authorization enforcement before application routes are migrated.
+Do not run `alembic upgrade head` on Railway until the release has passed local quality gates and the Railway PostgreSQL preflight has been explicitly verified.
