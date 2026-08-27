@@ -7,6 +7,7 @@ Create Date: 2026-08-26
 
 from __future__ import annotations
 
+import json
 import uuid
 from typing import Sequence, Union
 
@@ -94,6 +95,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("slug", name="uq_workspaces_slug"),
         sa.CheckConstraint("length(trim(name)) > 0", name="workspace_name_not_blank"),
         sa.CheckConstraint("length(trim(slug)) > 0", name="workspace_slug_not_blank"),
+        sa.CheckConstraint("default_language IN ('ar','en')", name="workspace_language_allowed"),
     )
     op.create_index("ix_workspaces_status", "workspaces", ["status"])
 
@@ -113,6 +115,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("username", name="uq_users_username"),
         sa.CheckConstraint("length(trim(email)) > 0", name="user_email_not_blank"),
         sa.CheckConstraint("length(trim(display_name)) > 0", name="user_display_name_not_blank"),
+        sa.CheckConstraint("preferred_language IN ('ar','en')", name="user_language_allowed"),
     )
     op.create_index("ix_users_status", "users", ["status"])
 
@@ -220,6 +223,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("id", "workspace_id", name="uq_brands_id_workspace"),
         sa.CheckConstraint("length(trim(name)) > 0", name="brand_name_not_blank"),
         sa.CheckConstraint("length(trim(slug)) > 0", name="brand_slug_not_blank"),
+        sa.CheckConstraint("primary_language IN ('ar','en')", name="brand_language_allowed"),
     )
     op.create_index("ix_brands_workspace_status", "brands", ["workspace_id", "status"])
 
@@ -253,6 +257,13 @@ def upgrade() -> None:
         sa.UniqueConstraint("brand_id", "name", name="uq_brand_voices_brand_name"),
     )
     op.create_index("ix_brand_voices_brand_default", "brand_voices", ["brand_id", "is_default"])
+    op.create_index(
+        "uq_brand_voices_one_default_per_brand",
+        "brand_voices",
+        ["brand_id"],
+        unique=True,
+        postgresql_where=sa.text("is_default IS TRUE"),
+    )
 
     op.create_table(
         "brand_audiences",
@@ -268,6 +279,7 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.ForeignKeyConstraint(["brand_id"], ["brands.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("brand_id", "name", name="uq_brand_audiences_brand_name"),
+        sa.CheckConstraint("language IN ('ar','en')", name="brand_audience_language_allowed"),
     )
     op.create_index("ix_brand_audiences_brand_language", "brand_audiences", ["brand_id", "language"])
 
@@ -305,6 +317,9 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.ForeignKeyConstraint(["brand_id"], ["brands.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("brand_id", "term", "language", name="uq_brand_terms_brand_term_language"),
+        sa.CheckConstraint("language IN ('ar','en')", name="brand_term_language_allowed"),
+        sa.CheckConstraint("length(trim(term)) > 0", name="brand_term_not_blank"),
+        sa.CheckConstraint("length(trim(preferred_form)) > 0", name="brand_term_preferred_not_blank"),
     )
     op.create_index("ix_brand_terms_brand_language", "brand_terms", ["brand_id", "language"])
 
@@ -338,12 +353,17 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.ForeignKeyConstraint(["brand_id"], ["brands.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["platform_id"], ["platforms.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["voice_id"], ["brand_voices.id"], ondelete="SET NULL"),
+        sa.ForeignKeyConstraint(["platform_id"], ["platforms.id"], ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(
+            ["voice_id", "brand_id"],
+            ["brand_voices.id", "brand_voices.brand_id"],
+            ondelete="RESTRICT",
+        ),
         sa.UniqueConstraint(
             "brand_id", "platform_id", "language",
             name="uq_brand_platform_profiles_brand_platform_language",
         ),
+        sa.CheckConstraint("language IN ('ar','en')", name="brand_platform_profile_language_allowed"),
         sa.CheckConstraint(
             "max_length IS NULL OR max_length > 0",
             name="brand_platform_profile_max_length_positive",
@@ -493,7 +513,7 @@ def upgrade() -> None:
                 "id": uuid.uuid5(uuid.NAMESPACE_URL, f"mena-content-agent:platform:{key}"),
                 "key": key,
                 "name": name,
-                "capabilities": capabilities,
+                "capabilities": json.dumps(capabilities, separators=(",", ":")),
             }
         )
 
@@ -503,7 +523,7 @@ def upgrade() -> None:
             sa.column("id", uuid_type()),
             sa.column("key", sa.String(50)),
             sa.column("name", sa.String(100)),
-            sa.column("capabilities", jsonb()),
+            sa.column("capabilities", sa.Text()),
         ),
         platform_values,
     )
