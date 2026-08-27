@@ -77,6 +77,12 @@ class BrandVoice(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     __table_args__ = (
         UniqueConstraint("brand_id", "name", name="uq_brand_voices_brand_name"),
         Index("ix_brand_voices_brand_default", "brand_id", "is_default"),
+        Index(
+            "uq_brand_voices_one_default_per_brand",
+            "brand_id",
+            unique=True,
+            postgresql_where=(is_default.is_(True)),
+        ),
     )
 
 
