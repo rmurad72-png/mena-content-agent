@@ -18,3 +18,8 @@ This is the authoritative replacement for the previous Phase 1.3 package. It is 
 ## Validation
 
 The delivery process requires: syntax compilation, unit/schema tests, migration source-contract tests, and offline PostgreSQL SQL generation when a PostgreSQL driver is available. Real Railway PostgreSQL upgrade/downgrade remains a deployment preflight and is never claimed locally without a real PostgreSQL service.
+
+
+## Final audit correction
+
+The composite Brand Voice foreign key requires a UNIQUE constraint on `(id, brand_id)` in PostgreSQL. The authoritative model and migration now include `uq_brand_voices_id_brand`; this was verified through metadata and migration contract tests. Legacy backup source/test copies are excluded from the authoritative tree.
