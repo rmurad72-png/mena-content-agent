@@ -255,6 +255,8 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.ForeignKeyConstraint(["brand_id"], ["brands.id"], ondelete="CASCADE"),
         sa.UniqueConstraint("brand_id", "name", name="uq_brand_voices_brand_name"),
+        # Required by the composite FK from brand_platform_profiles.
+        sa.UniqueConstraint("id", "brand_id", name="uq_brand_voices_id_brand"),
     )
     op.create_index("ix_brand_voices_brand_default", "brand_voices", ["brand_id", "is_default"])
     op.create_index(
