@@ -76,6 +76,8 @@ class BrandVoice(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     is_default: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     __table_args__ = (
         UniqueConstraint("brand_id", "name", name="uq_brand_voices_brand_name"),
+        # Required by the composite FK from brand_platform_profiles.
+        UniqueConstraint("id", "brand_id", name="uq_brand_voices_id_brand"),
         Index("ix_brand_voices_brand_default", "brand_id", "is_default"),
         Index(
             "uq_brand_voices_one_default_per_brand",
