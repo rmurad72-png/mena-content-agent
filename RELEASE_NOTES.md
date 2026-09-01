@@ -1,30 +1,31 @@
-# Phase 1.3-R3 — Authoritative Release
+# Sprint Release 0.6.0 — Authoritative Phase 1 Hardening
 
 ## Quality Gate
 
 - Python compileall: PASS
-- Automated tests: 19/19 PASS
-- PostgreSQL Alembic upgrade SQL generation: PASS
-- PostgreSQL Alembic downgrade SQL generation: PASS
-- Composite Brand/Voice foreign-key contract: PASS
-- Default Voice uniqueness contract: PASS
-- Language constraints contract: PASS
-- Tenant/Brand boundary contracts: PASS
+- Automated tests: PASS
+- PostgreSQL DDL compilation: PASS
+- Alembic PostgreSQL offline upgrade SQL generation: PASS
+- Alembic PostgreSQL offline downgrade SQL generation: PASS
+- Configuration/Railway alias simulation: PASS
+- Unresolved Railway reference rejection: PASS
 
 ## Runtime hardening
 
-- Railway environment aliases are explicit in `Settings`.
-- `DATABASE_URL` remains optional at boot and mandatory for DB operations.
-- SQLAlchemy engine is process-cached to avoid creating a new connection pool per session.
-- Connection pre-ping, 10-second connect timeout, and 30-minute pool recycling are enabled.
+- `DATABASE_URL`, `DATABASE_PRIVATE_URL`, and `POSTGRES_PRIVATE_URL` are accepted through one settings layer.
+- Unresolved Railway interpolation values such as `${{ Postgres.DATABASE_PRIVATE_URL }}` are rejected early.
+- SQLAlchemy engine is process-cached.
+- Connection pre-ping, timeout, and pool recycling are enabled.
 - Controlled shutdown disposes the shared database engine.
-- `/health` remains a non-database liveness endpoint.
-- `/health/db` provides a read-only connectivity check and never exposes connection details.
+- `/health` is a non-database liveness check.
+- `/health/db` is a read-only readiness check and returns HTTP 503 without connection details when unavailable.
+- Telegram UI exposes only the currently implemented Telegram publishing adapter; registry entries for future platforms are not presented as executable features.
+- Alembic and application runtime use the same configuration normalization path.
 
 ## Scope integrity
 
-Phase 1 does not invent the future content/AI/publishing/financial domains. Those domains require their own schema and workflow design before implementation.
+Future AI/research/content-version/evaluation/approval/publishing-job/cost-accounting domains remain intentionally unimplemented until their domain and financial/operational rules are designed and tested.
 
-## Railway limitation
+## Local verification limitation
 
-The local simulation does not have access to the user's Railway PostgreSQL instance. Therefore live Railway connectivity and live migration execution remain a deployment preflight step and are not claimed as tested here.
+The simulation environment has no network access to the user's Railway PostgreSQL instance and no Docker daemon. Live Railway connectivity and migration execution are therefore not claimed as locally tested.

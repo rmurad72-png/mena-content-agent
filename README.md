@@ -4,7 +4,7 @@ Production foundation for a multi-workspace, multi-brand content platform.
 
 ## Current authoritative release
 
-**Phase 1.3-R3** establishes the PostgreSQL domain foundation and runtime database lifecycle.
+**Sprint Release 0.6.0** establishes the PostgreSQL domain foundation and runtime database lifecycle.
 
 ### Domain foundation
 
@@ -14,14 +14,14 @@ Production foundation for a multi-workspace, multi-brand content platform.
 - Brand identity, voice, audience, rules, and terminology.
 - Brand-specific platform profiles.
 - Multiple publishing accounts per Brand.
-- Telegram, X, Reddit, YouTube, Instagram, and LinkedIn platform registry.
+- Telegram, X, Reddit, YouTube, Instagram, and LinkedIn platform registry; only implemented publishing adapters are exposed in the Telegram UI.
 - Cross-workspace and cross-brand integrity enforced by PostgreSQL foreign keys.
 - Arabic is the default language; English is supported when explicitly configured.
 
 ### Database/runtime foundation
 
 - PostgreSQL via SQLAlchemy 2 + psycopg 3.
-- Railway `DATABASE_URL` support for `postgres://`, `postgresql://`, and `postgresql+psycopg://`.
+- Railway private-database aliases: `DATABASE_URL`, `DATABASE_PRIVATE_URL`, and `POSTGRES_PRIVATE_URL`; supported URL schemes are `postgres://`, `postgresql://`, and `postgresql+psycopg://`.
 - Explicit environment aliases for Railway variables.
 - One process-wide SQLAlchemy engine/pool instead of creating a new pool per session.
 - Connection pre-ping, connection timeout, and pool recycling for operational resilience.
@@ -55,7 +55,7 @@ python -m compileall -q app alembic tests
 pytest -q
 ```
 
-The quality gate covers configuration, database lifecycle, health behavior, model registration, tenant foreign keys, Brand/Voice isolation, language constraints, default-voice uniqueness, platform-account boundaries, and migration contracts.
+The quality gate covers configuration aliases, unresolved Railway references, database lifecycle, health behavior, model registration, tenant foreign keys, Brand/Voice isolation, language constraints, default-voice uniqueness, platform-account boundaries, API contracts, and migration contracts.
 
 ### Explicit next-domain boundary
 
