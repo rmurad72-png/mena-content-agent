@@ -1,7 +1,7 @@
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, HTTPException, Request, Response
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import TelegramError
 from telegram.ext import (
@@ -15,6 +15,8 @@ from telegram.ext import (
 )
 
 from app.config import settings
+from app.database.health import check_database_connection
+from app.database.session import dispose_database_engine
 
 
 TITLE, CONTENT, LINK, PHOTO, REVIEW, CHANNEL, CONFIRM = range(7)
@@ -129,29 +131,10 @@ def review_keyboard() -> InlineKeyboardMarkup:
 
 
 def channel_keyboard() -> InlineKeyboardMarkup:
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                "Telegram",
-                callback_data="channel_telegram"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "X",
-                callback_data="channel_x"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "Reddit",
-                callback_data="channel_reddit"
-            )
-        ],
-    ]
-
-    return InlineKeyboardMarkup(keyboard)
-
+    # Only expose a platform that has a real publishing adapter in this release.
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("Telegram", callback_data="channel_telegram")]
+    ])
 
 def confirm_keyboard() -> InlineKeyboardMarkup:
     keyboard = [
@@ -833,7 +816,7 @@ draft_conversation = ConversationHandler(
         CHANNEL: [
             CallbackQueryHandler(
                 choose_channel,
-                pattern="^channel_(telegram|x|reddit)$"
+                pattern="^channel_telegram$"
             ),
         ],
         CONFIRM: [
@@ -895,17 +878,20 @@ telegram_app.add_error_handler(
 async def lifespan(app: FastAPI):
     await telegram_app.initialize()
     await telegram_app.start()
+    try:
+        yield
+    finally:
+        await telegram_app.stop()
+        await telegram_app.shutdown()
+        dispose_database_engine()
 
-    yield
 
-    await telegram_app.stop()
-    await telegram_app.shutdown()
-
+APP_VERSION = "0.6.0"
 
 app = FastAPI(
     title="MENA Content Agent",
-    version="0.5.3",
-    lifespan=lifespan
+    version=APP_VERSION,
+    lifespan=lifespan,
 )
 
 
@@ -914,7 +900,7 @@ async def root():
     return {
         "name": "MENA Content Agent",
         "status": "running",
-        "version": "0.5.3"
+        "version": APP_VERSION
     }
 
 
@@ -922,8 +908,18 @@ async def root():
 async def health():
     return {
         "status": "ok",
-        "environment": settings.environment
+        "environment": settings.environment,
+        "version": APP_VERSION,
     }
+
+
+@app.get("/health/db")
+async def database_health():
+    try:
+        return check_database_connection()
+    except Exception:
+        logger.exception("Database health check failed")
+        raise HTTPException(status_code=503, detail="database unavailable")
 
 
 @app.post("/telegram/webhook")
