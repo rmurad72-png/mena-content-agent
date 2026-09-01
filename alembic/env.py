@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import os
-import sys
 from logging.config import fileConfig
+import sys
 from pathlib import Path
 
 from alembic import context
@@ -12,6 +11,8 @@ ROOT = Path(__file__).resolve().parents[1]
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
+from app.config import settings  # noqa: E402
+from app.database.session import normalize_database_url  # noqa: E402
 from app.models import Base  # noqa: E402
 import app.models  # noqa: F401, E402
 
@@ -25,16 +26,12 @@ target_metadata = Base.metadata
 
 
 def database_url() -> str:
-    value = os.getenv("DATABASE_URL")
-    if not value:
+    value = settings.database_url
+    if not value or not value.strip():
         raise RuntimeError(
             "DATABASE_URL is required. Configure Railway PostgreSQL before running Alembic."
         )
-    if value.startswith("postgres://"):
-        return "postgresql+psycopg://" + value[len("postgres://") :]
-    if value.startswith("postgresql://"):
-        return "postgresql+psycopg://" + value[len("postgresql://") :]
-    return value
+    return normalize_database_url(value)
 
 
 def run_migrations_offline() -> None:
