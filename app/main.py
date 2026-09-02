@@ -886,7 +886,7 @@ async def lifespan(app: FastAPI):
         dispose_database_engine()
 
 
-APP_VERSION = "0.6.0"
+APP_VERSION = "0.6.1"
 
 app = FastAPI(
     title="MENA Content Agent",
