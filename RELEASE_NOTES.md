@@ -1,4 +1,4 @@
-# Sprint Release 0.6.0 — Authoritative Phase 1 Hardening
+# Sprint Release 0.6.1 — Authoritative Phase 1 Hardening
 
 ## Quality Gate
 
@@ -29,3 +29,8 @@ Future AI/research/content-version/evaluation/approval/publishing-job/cost-accou
 ## Local verification limitation
 
 The simulation environment has no network access to the user's Railway PostgreSQL instance and no Docker daemon. Live Railway connectivity and migration execution are therefore not claimed as locally tested.
+
+## Migration Gate hardening
+- `/health/db` remains read-only and now reports Alembic migration state.
+- Detects missing `alembic_version`, current revision(s), declared head revision(s), and whether migration is required.
+- No endpoint performs migration or changes schema.

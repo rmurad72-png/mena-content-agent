@@ -4,7 +4,7 @@ Production foundation for a multi-workspace, multi-brand content platform.
 
 ## Current authoritative release
 
-**Sprint Release 0.6.0** establishes the PostgreSQL domain foundation and runtime database lifecycle.
+**Sprint Release 0.6.1** establishes the PostgreSQL domain foundation and runtime database lifecycle.
 
 ### Domain foundation
 
